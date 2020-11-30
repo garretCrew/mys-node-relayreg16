@@ -10,17 +10,42 @@
 #define MY_PARENT_NODE_ID 254
 
 #define MY_NODE_ID 10
-#define RELAY_REGISTER_16 1
-#define TEMP_SENSOR 2
+#define RELAY_REGISTER_16 0
+#define TEMP_SENSOR 1
+#define REPORT_TIME 60000
 
 #define DS_PIN 3
 #define STCP_PIN 5
 #define SHCP_PIN 4
-#define OE_PIN 6
+//#define OE_PIN 6
+#define ONE_WIRE_BUS 7
+#define MAX_ATTACHED_DS18B20 1
 
-#include <MySensors.h>  
+#include <MySensors.h>
+#include <MsTimer2.h>
+#include <DallasTemperature.h>
+#include <OneWire.h>
 
-MyMessage msg(RELAY_REGISTER_16,V_CUSTOM);
+unsigned int relRegLastStat = 0;
+
+MyMessage msgRelReg16(RELAY_REGISTER_16,V_CUSTOM);
+MyMessage msgTempSens(TEMP_SENSOR, V_TEMP);
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
+
+void reportStatus() {
+  send(msgRelReg16.set(relRegLastStat, 0));
+  
+  sensors.requestTemperatures();
+  int16_t conversionTime = sensors.millisToWaitForConversion(sensors.getResolution());
+  sleep(conversionTime);
+  float temperature = static_cast<float>(static_cast<int>((getControllerConfig().isMetric?sensors.getTempCByIndex(0):sensors.getTempFByIndex(0)) * 10.)) / 10.;
+
+  //if (lastTemperature != temperature && temperature != -127.00 && temperature != 85.00) {
+  if (temperature != -127.00 && temperature != 85.00) {
+    send(msgTempSens.set(temperature,0));
+  }
+}
 
 void preHwInit() {
   pinMode(DS_PIN, OUTPUT);  
@@ -32,13 +57,21 @@ void preHwInit() {
   digitalWrite(STCP_PIN, HIGH);
 }
 
+void before() {
+  sensors.begin();
+}
+
 void presentation() { 
   sendSketchInfo("Rel array[16] & temp sens", "0.2");
   present(RELAY_REGISTER_16, S_CUSTOM);
   present(TEMP_SENSOR, S_TEMP);
 }
 
-void setup() {}
+void setup() {
+  sensors.setWaitForConversion(false);
+  MsTimer2::set(REPORT_TIME, reportStatus);
+  MsTimer2::start();
+}
 
 void loop() {}
 
@@ -50,6 +83,7 @@ void receive(const MyMessage &message) {
     shiftOut(DS_PIN, SHCP_PIN, MSBFIRST, ~message.getUInt()%256);
     delay(10);
     digitalWrite(STCP_PIN, HIGH);
-    send(msg.set(message.getUInt(), 0));
+    relRegLastStat = message.getUInt();
+    send(msgRelReg16.set(relRegLastStat, 0));
   }
 }
