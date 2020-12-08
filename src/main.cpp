@@ -33,6 +33,19 @@ MyMessage msgTempSens(TEMP_SENSOR, V_TEMP);
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
+unsigned int regCalc(int cmnd) {
+  if(cmnd >= 1 && cmnd <= 16) {
+    if(!(relRegLastStat & 1<<(cmnd - 1))) {relRegLastStat += 1<<(cmnd - 1);}
+  } 
+  else if(cmnd <= -1 && cmnd >= -16) {
+    if(relRegLastStat & 1<<((cmnd * -1) - 1)) {relRegLastStat -= 1<<((cmnd * -1) - 1);}
+  }
+  else {
+    relRegLastStat = 0;
+  }
+  return relRegLastStat;
+}
+
 void reportStatus() {
   send(msgRelReg16.set(relRegLastStat, 0));
   
@@ -62,7 +75,7 @@ void before() {
 }
 
 void presentation() { 
-  sendSketchInfo("Rel array[16] & temp sens", "0.2");
+  sendSketchInfo("Rel array[16] & temp sens", "0.3");
   present(RELAY_REGISTER_16, S_CUSTOM);
   present(TEMP_SENSOR, S_TEMP);
 }
@@ -77,13 +90,13 @@ void loop() {}
 
 void receive(const MyMessage &message) {
   if (message.getSensor()==RELAY_REGISTER_16 && message.getType()==V_CUSTOM) {
+    unsigned int relCmnd = regCalc(message.getUInt());
     digitalWrite(STCP_PIN, LOW);
     delay(10);
-    shiftOut(DS_PIN, SHCP_PIN, MSBFIRST, ~message.getUInt()/256);
-    shiftOut(DS_PIN, SHCP_PIN, MSBFIRST, ~message.getUInt()%256);
+    shiftOut(DS_PIN, SHCP_PIN, MSBFIRST, ~relCmnd/256);
+    shiftOut(DS_PIN, SHCP_PIN, MSBFIRST, ~relCmnd%256);
     delay(10);
     digitalWrite(STCP_PIN, HIGH);
-    relRegLastStat = message.getUInt();
     send(msgRelReg16.set(relRegLastStat, 0));
   }
 }
