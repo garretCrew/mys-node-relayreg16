@@ -90,13 +90,19 @@ void loop() {}
 
 void receive(const MyMessage &message) {
   if (message.getSensor()==RELAY_REGISTER_16 && message.getType()==V_CUSTOM) {
-    unsigned int relCmnd = regCalc(message.getUInt());
+    String res;
+    unsigned int relCmnd = regCalc(message.getInt());
     digitalWrite(STCP_PIN, LOW);
     delay(10);
     shiftOut(DS_PIN, SHCP_PIN, MSBFIRST, ~relCmnd/256);
     shiftOut(DS_PIN, SHCP_PIN, MSBFIRST, ~relCmnd%256);
     delay(10);
     digitalWrite(STCP_PIN, HIGH);
-    send(msgRelReg16.set(relRegLastStat, 0));
+    res = "LC:";
+    res.concat(message.getInt());
+    send(msgRelReg16.set(res.c_str()));
+    res = "RS:";
+    res.concat(relCmnd);
+    send(msgRelReg16.set(res.c_str()));
   }
 }
